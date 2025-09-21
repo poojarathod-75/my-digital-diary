@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Digital Diary</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", cursive;
+      background: #fdf6e3;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .diary-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+      background: repeating-linear-gradient(
+        white,
+        white 28px,
+        #cfd8dc 29px
+      );
+      background-size: 100% 30px;
+      height: 100vh;
+      width: 100%;
+      overflow-y: auto;
+    }
+
+    .diary-page h2 {
+      font-family: "Brush Script MT", cursive;
+      font-size: 32px;
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+
+    #diary {
+      width: 90%;
+      height: 150px;
+      border: none;
+      outline: none;
+      font-size: 18px;
+      font-family: "Segoe Print", cursive;
+      background: transparent;
+      resize: none;
+      line-height: 30px;
+      color: #333;
+    }
+
+    .buttons {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      padding: 10px 15px;
+      border: none;
+      font-size: 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .save-btn { background: #27ae60; color: white; }
+    .save-btn:hover { background: #219150; }
+
+    .clear-btn { background: #8e44ad; color: white; }
+    .clear-btn:hover { background: #6c3483; }
+
+    .export-btn { background: #e67e22; color: white; }
+    .export-btn:hover { background: #cf6514; }
+
+    .inbox {
+      margin-top: 30px;
+      width: 90%;
+      background: #fff3e0;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .inbox h3 { margin-bottom: 10px; }
+
+    .search-box {
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      margin-bottom: 15px;
+    }
+
+    .entry {
+      border-bottom: 1px solid #ccc;
+      padding: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 15px;
+    }
+
+    .entry:last-child { border-bottom: none; }
+
+    .entry-text { flex: 1; }
+
+    .entry-time {
+      font-size: 12px;
+      color: #555;
+      display: block;
+      margin-top: 4px;
+    }
+
+    .entry-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .delete-btn, .edit-btn {
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      color: white;
+    }
+
+    .delete-btn { background: #e74c3c; }
+    .delete-btn:hover { background: #c0392b; }
+
+    .edit-btn { background: #2980b9; }
+    .edit-btn:hover { background: #1f6391; }
+  </style>
+</head>
+<body>
+
+  <div class="diary-page" id="diaryPage">
+    <h2>Welcome to Your Diary</h2>
+    <textarea id="diary" placeholder="Write your thoughts here..."></textarea>
+
+    <div class="buttons">
+      <button class="save-btn" onclick="saveEntry()">💾 Save</button>
+      <button class="clear-btn" onclick="clearAll()">🗑️ Clear All</button>
+      <button class="export-btn" onclick="exportTXT()">📄 Export TXT</button>
+      <button class="export-btn" onclick="exportPDF()">📑 Export PDF</button>
+    </div>
+
+    <div class="inbox" id="inbox">
+      <h3>📥 Inbox</h3>
+      <input type="text" id="search" class="search-box" placeholder="🔍 Search entries..." oninput="searchEntries()">
+      <div id="entries"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script>
+    let entries = JSON.parse(localStorage.getItem("diaryEntries")) || [];
+    let editIndex = null;
+
+    function saveEntry() {
+      const text = document.getElementById("diary").value.trim();
+      if (!text) { alert("Diary entry is empty!"); return; }
+
+      const timestamp = new Date().toLocaleString();
+
+      if (editIndex !== null) {
+        entries[editIndex].text = text;
+        entries[editIndex].updatedAt = timestamp;
+        editIndex = null;
+      } else {
+        entries.unshift({ text, createdAt: timestamp, updatedAt: timestamp });
+      }
+
+      localStorage.setItem("diaryEntries", JSON.stringify(entries));
+      document.getElementById("diary").value = "";
+      loadEntries();
+    }
+
+    function deleteEntry(index) {
+      entries.splice(index, 1);
+      localStorage.setItem("diaryEntries", JSON.stringify(entries));
+      loadEntries();
+    }
+
+    function editEntry(index) {
+      document.getElementById("diary").value = entries[index].text;
+      editIndex = index;
+    }
+
+    function clearAll() {
+      if (confirm("⚠️ Are you sure you want to delete ALL diary entries?")) {
+        entries = [];
+        localStorage.removeItem("diaryEntries");
+        loadEntries();
+      }
+    }
+
+    function exportTXT() {
+      if (entries.length === 0) { alert("No entries to export!"); return; }
+      let content = "My Digital Diary\n\n";
+      entries.forEach((entry, i) => {
+        content += `Entry ${i+1}:\n${entry.text}\nCreated on: ${entry.createdAt}\nLast updated: ${entry.updatedAt}\n\n---\n\n`;
+      });
+      const blob = new Blob([content], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "MyDiary.txt";
+      link.click();
+    }
+
+    async function exportPDF() {
+      if (entries.length === 0) { alert("No entries to export!"); return; }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 10;
+      const lineHeight = 7;
+      let y = margin + 10;
+      let pageNum = 1;
+
+      function addTitle() {
+        doc.setFont("times", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(44, 62, 80); // dark blue title
+        doc.text("My Digital Diary", pageWidth/2, margin+5, { align: "center" });
+        doc.setFont("times", "normal");
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        y += 5;
+      }
+
+      addTitle();
+
+      entries.forEach((entry, i) => {
+        const heading = `Entry ${i + 1}:`;
+        const content = `${entry.text}\nCreated on: ${entry.createdAt}\nLast updated: ${entry.updatedAt}`;
+
+        const headingSplit = doc.splitTextToSize(heading, pageWidth - 2*margin);
+        const contentSplit = doc.splitTextToSize(content, pageWidth - 2*margin);
+
+        if (y + (headingSplit.length + contentSplit.length + 2) * lineHeight > pageHeight - margin - 10) {
+          doc.setFontSize(10);
+          doc.text(`Page ${pageNum}`, pageWidth/2, pageHeight-5, { align: "center" });
+          pageNum++;
+          doc.addPage();
+          y = margin + 10;
+          addTitle();
+        }
+
+        doc.setFont("times", "bold");
+        doc.setTextColor(39, 174, 96); // green heading
+        doc.text(headingSplit, margin, y);
+        y += headingSplit.length * lineHeight;
+
+        doc.setFont("times", "normal");
+        doc.setTextColor(0,0,0);
+        doc.text(contentSplit, margin, y);
+        y += contentSplit.length * lineHeight;
+
+        // Colored separator
+        doc.setDrawColor(52, 152, 219); // blue
+        doc.setLineWidth(0.5);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 10;
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(0,0,0);
+      doc.text(`Page ${pageNum}`, pageWidth/2, pageHeight-5, { align: "center" });
+      doc.save("MyDiary.pdf");
+    }
+
+    function loadEntries(filteredEntries = entries) {
+      const entriesDiv = document.getElementById("entries");
+      entriesDiv.innerHTML = "";
+
+      if (filteredEntries.length === 0) { entriesDiv.innerHTML = "<p>No entries found.</p>"; return; }
+
+      filteredEntries.forEach((entry) => {
+        const div = document.createElement("div");
+        div.classList.add("entry");
+
+        const content = document.createElement("div");
+        content.classList.add("entry-text");
+        content.textContent = entry.text;
+
+        const created = document.createElement("span");
+        created.classList.add("entry-time");
+        created.textContent = "Created on: " + entry.createdAt;
+
+        const updated = document.createElement("span");
+        updated.classList.add("entry-time");
+        updated.textContent = "Last updated on: " + entry.updatedAt;
+
+        content.appendChild(created);
+        content.appendChild(updated);
+
+        const btnGroup = document.createElement("div");
+        btnGroup.classList.add("entry-buttons");
+
+        const editBtn = document.createElement("button");
+        editBtn.textContent = "✏️ Edit";
+        editBtn.classList.add("edit-btn");
+        editBtn.onclick = () => editEntry(entries.indexOf(entry));
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "❌ Delete";
+        deleteBtn.classList.add("delete-btn");
+        deleteBtn.onclick = () => deleteEntry(entries.indexOf(entry));
+
+        btnGroup.appendChild(editBtn);
+        btnGroup.appendChild(deleteBtn);
+
+        div.appendChild(content);
+        div.appendChild(btnGroup);
+        entriesDiv.appendChild(div);
+      });
+    }
+
+    function searchEntries() {
+      const query = document.getElementById("search").value.toLowerCase();
+      const filtered = entries.filter(entry => entry.text.toLowerCase().includes(query));
+      loadEntries(filtered);
+    }
+
+    loadEntries();
+  </script>
+</body>
+</html>
